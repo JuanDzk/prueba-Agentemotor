@@ -1,0 +1,548 @@
+========================================================================
+FASE 2: INGENIERÍA DE PROMPTS Y REFINAMIENTO TÉCNICO
+Herramienta: Generador de Prompts Estructurados (GEMINI)
+Entradas: PDF "prueba-tecnica-agentemotor-2026.pdf"
+Objetivo: Traducir las decisiones de la Fase 1 en instrucciones técnicas 
+          libres de ambigüedad, optimizadas para la generación de código.
+========================================================================
+
+**USER:**
+Hola. Actúa como un Arquitecto de Software Senior. Vamos a desarrollar un MVP para una asesora de seguros llamada María que gestiona 280 clientes en un Excel y está perdiendo el control de los vencimientos.
+El núcleo del negocio es priorizar las alertas basándonos en la regla comercial colombiana de los 30 días de gracia para pólizas vencidas.
+Antes de darme una sola linea de codigo, quiero que analices el problema, me propongas las fases de desarrollo bajo la metodología SDD y definas el stack tecnológico óptimo usando Python (FastAPI + SQLite nativo) 
+para el backend y HTML5/JS Vanilla con Tailwind CSS para el frontend, priorizando la portabilidad y ligereza del proyecto.
+
+Para los datos semilla (seeding), es mandatorio rechazar el hardcoding de fechas fijas (como '2026-05-15'); la inserción debe calcular deltas matemáticos dinámicos a partir de la fecha del día actual (today) para evitar la obsolescencia del software y garantizar que el evaluador técnico siempre visualice un tablero actualizado.
+
+**IA:**
+¡Hola! Excelente iniciativa. Abordar esto desde el rol de Arquitecto de Software Senior y bajo la metodología **SDD (Specification-Driven Development)** es la estrategia correcta para garantizar que el 70% bien pensado supere con creces a un 100% improvisado. Al final del día, este documento formará la base estructural de tu entregable `spec.md`.
+
+---
+
+## 1. Análisis del Problema y Reglas de Negocio
+
+El dolor operativo de María es un problema clásico de **pérdida de contexto, falta de persistencia robusta y ausencia de un sistema de alertas proactivo**. El Excel actual es un cuello de botella reactivo.
+
+### El Factor Crítico: La Ventana de 30 días
+
+La regulación colombiana establece un umbral de gracia de 30 días para vehículos. Esto segmenta el riesgo en tres estados críticos que el software debe reflejar visualmente:
+
+1. **Vigente (Fase Preventiva):** Pólizas que vencen en los próximos 15-30 días. María debe anticiparse.
+2. 
+**Vencida en Periodo de Gracia (Fase Crítica - Menor a 30 días):** El cliente está descubierto, pero la renovación mantiene el historial y no requiere nueva contratación. Aquí es donde María pierde 5-10 clientes al mes.
+
+
+3. 
+**Vencida Fuera de Gracia (Fase de Pérdida - Mayor a 30 días):** Requiere nueva contratación y se compite abiertamente con el mercado.
+
+
+
+---
+
+## 2. Definición del Stack Tecnológico Óptimo
+
+Para cumplir estrictamente con la restricción de **no usar Docker ni servicios complejos**, y asegurar que el sistema corra en un entorno limpio con un máximo de 3 comandos, utilizaremos una arquitectura monolítica ligera con separación limpia de responsabilidades (Separation of Concerns):
+
+* **Backend:** **FastAPI + Uvicorn**. Nos da asincronía nativa, tipado estricto con Pydantic, validación automática de datos y documentación interactiva (Swagger) instantánea.
+* 
+**Persistencia:** **SQLite nativo (módulo `sqlite3` de Python)**. Cumple con el requerimiento de ligereza y portabilidad absoluta mediante un único archivo de base de datos local (`agentemotor.db`).
+
+
+* 
+**Frontend:** **Single Page Application (SPA) en HTML5 + CSS (Tailwind vía CDN) + JavaScript Vanilla (ES6+)**. Al ser una sola pantalla principal para María, evitamos sobrecargar el proyecto con configuraciones de Node.js o empaquetadores (Webpack/Vite). Se sirve directamente desde FastAPI como archivos estáticos.
+
+
+
+---
+
+## 3. Propuesta de Fases de Desarrollo (Metodología SDD)
+
+Diseñaremos el MVP dividiéndolo en 4 fases incrementales y lógicas:
+
+### Fase 1: Arquitectura de Datos y Contratos de API (Specification)
+
+Antes del código, definimos los contratos. Crearemos el esquema de base de datos relacional optimizado para evitar la redundancia del Excel.
+
+#### Modelo de Datos Propuesto (SQLite):
+
+* 
+`clients` (id, name, phone, email) 
+
+
+* 
+`policies` (id, client_id, policy_number, insurer, expiration_date, status, premium) 
+
+
+* 
+`interactions` (id, policy_id, date, type, notes, outcome) 
+
+
+
+#### Endpoints Principales (REST):
+
+* 
+`GET /api/v1/dashboard`: Retorna las pólizas que requieren atención urgente organizadas por los niveles de prioridad del negocio.
+
+
+* 
+`POST /api/v1/interactions`: Registra una gestión sobre una póliza (reemplaza la "X" en la columna de María).
+
+
+* 
+`PUT /api/v1/policies/{id}/renew`: Registra la renovación extendiendo la fecha de vencimiento.
+
+
+
+### Fase 2: Construcción del Backend y Lógica de Negocio (Core)
+
+Implementación del servidor FastAPI. El núcleo algorítmico calculará dinámicamente la prioridad basándose en `current_date - expiration_date`.
+
+* 
+**Optimización Crucial:** A diferencia del snippet ineficiente provisto en la prueba (que genera un problema de consultas concurrentes $N+1$ al iterar y golpear la base de datos por cada registro), utilizaremos un **SQL Join nativo** para traer la información agregada en una sola transacción limpia.
+
+
+
+### Fase 3: Frontend Centrado en la UX de María (Interface)
+
+Diseño de la pantalla única funcional utilizando Tailwind CSS.
+
+* 
+**Filtros Inteligentes:** Pestañas de prioridad basadas en el riesgo de pérdida (Urgente: < 30 días vencido; Crítico: Hoy; Preventivo: Vence pronto).
+
+
+* 
+**Acciones en un Clic:** Botones directos para "Registrar llamada" o "Renovar Póliza" sin perder el contexto del cliente.
+
+
+
+### Fase 4: Aseguramiento y Estrategia de Pruebas (Testing & Delivery)
+
+Para cumplir con los **2 o 3 tests del caso más crítico**, utilizaremos `pytest` junto con el `TestClient` de FastAPI para validar de manera automatizada:
+
+1. 
+**Test de Alerta Crítica:** Verificar que una póliza vencida hace 5 días sea categorizada con prioridad máxima de acción inmediata antes de los 30 días.
+
+
+2. 
+**Test de Transición de Estado:** Garantizar que al registrar una renovación con éxito, el estado de la póliza cambie y la fecha de vencimiento se actualice correctamente en la base de datos.
+
+
+
+---
+
+¿Estás de acuerdo con este enfoque de arquitectura y distribución de fases para comenzar a estructurar formalmente nuestra especificación técnica (`spec.md`)?
+
+**USER:**
+
+Excelente análisis. Estoy de acuerdo con las fases, el enfoque de arquitectura ligera y la optimización del SQL JOIN para evitar el problema de consultas N+1.
+
+Ahora, basándote en este acuerdo arquitectónico, necesito que estructures un PROMPT OPTIMIZADO de Ingeniería de Software (utilizando la técnica de "Cadena de Pensamiento"). para llevárselo a otro modelo de IA que se encargará exclusivamente de escribir el código limpio.
+
+El prompt que me generes debe exigirle a la otra IA lo siguiente:
+
+1. Nombre del archivo e infraestructura: El archivo debe llamarse única y estrictamente `main.py`. Debe utilizar FastAPI, Uvicorn y la librería asíncrona `aiosqlite` para la persistencia local en un archivo llamado `agentemotor.db`.
+
+2. Ciclo de Vida y Persistencia (Centinela): Al arrancar la aplicación (usando lifespan), debe validar con `os.path.exists` si el archivo de la base de datos ya existe. Si NO existe, debe ejecutar el script DDL para crear tres tablas básicas (`clients`, `policies`, `contact_attempts`) e insertar de forma automática los datos semilla de prueba. Si ya existe, debe iniciar el servidor en silencio sin alterar la información persistida.
+
+3. Datos Semilla Dinámicos (Evitar obsolescencia): Para garantizar que el evaluador técnico vea las alertas correctas independientemente del día o mes en que ejecute el proyecto, las fechas de las pólizas de prueba NO deben estar hardcodeadas como texto fijo. Deben calcularse dinámicamente en Python usando `datetime.date.today()` y `timedelta` para poblar exactamente los siguientes escenarios de uso:
+   - 2 pólizas en estado "Crítico" (Vencidas, pero con menos de 30 días de retraso respecto a hoy, dentro del periodo de gracia colombiano).
+   - 2 pólizas en estado "Perdido" (Vencidas hace más de 30 días respecto a hoy).
+   - 2 pólizas en estado "Preventivo" (Vigentes que vencen en los próximos 15 a 30 días a partir de hoy).
+
+4. Contrato de Endpoints Estrictos:
+   - `GET /api/v1/dashboard`: Debe resolver las tres categorías en paralelo usando un único formato SQL relacional con INNER JOIN para traer los datos del titular (nombre y teléfono principal) compactados. Debe retornar un JSON limpio con tres listas independientes: "criticas", "perdidas" y "preventivas".
+   - `POST /api/v1/policies/{policy_id}/attempts`: Debe recibir el esquema Pydantic para registrar la gestión de contacto en la tabla respectiva y asociarla a la póliza.
+
+Por favor, genérame el prompt estructurado, claro, libre de tecnicismos excesivos en su redacción externa pero técnicamente riguroso en sus instrucciones y restricciones, listo para copiar y pegar.
+
+**IA:**
+
+Aquí tienes el prompt de ingeniería de software altamente optimizado bajo la técnica de **Cadena de Pensamiento (Chain of Thought)**. Está diseñado para que la IA receptora entienda el contexto de negocio, razone paso a paso la arquitectura y genere el código exacto, limpio y sin atajos técnicos.
+
+Puedes copiar y pegar el siguiente bloque de texto en la otra IA:
+
+---
+
+```markdown
+Eres un Ingeniero de Software Senior especialista en Python, FastAPI y optimización de bases de datos relacionales. Tu objetivo es escribir un backend robusto, limpio y autocontenido para un MVP que ayuda a una asesora de seguros a gestionar renovaciones críticas bajo la regulación colombiana.
+
+Sigue cuidadosamente el razonamiento y las instrucciones detalladas a continuación para construir el backend.
+
+---
+
+### 1. CONTEXTO DE NEGOCIO Y REGLA CRÍTICA
+El sistema ayuda a gestionar el riesgo de pérdida de clientes basándose en la fecha actual (hoy) frente a la fecha de vencimiento de las pólizas:
+- Póliza Crítica: Vencida hoy o en los últimos 30 días (Periodo de gracia legal colombiano. Acción urgente).
+- Póliza Perdida: Vencida hace más de 30 días (El cliente ya se pudo haber ido con la competencia).
+- Póliza Preventiva: Aún vigente, pero vence en los próximos 15 a 30 días (Fase preventiva).
+
+---
+
+### 2. RESTRICCIONES TÉCNICAS ESTRICTAS
+1. Nombre del Archivo: Todo el backend debe residir única y estrictamente en un solo archivo llamado `main.py`.
+2. Stack Principal: FastAPI, Uvicorn como servidor, y la librería `aiosqlite` para interactuar de forma completamente asíncrona con la base de datos.
+3. Base de Datos: Un archivo SQLite local llamado `agentemotor.db`.
+
+---
+
+### 3. CADENA DE PENSAMIENTO: PASO A PASO DE LA IMPLEMENTACIÓN
+
+Quiero que estructures el archivo `main.py` pensando y resolviendo los siguientes bloques en orden cronológico:
+
+#### PASO A PASO 1: Modelos de Datos (Pydantic) y Conexión Asíncrona
+- Define un manejador de contexto asíncrono o una función generadora para obtener la conexión a la base de datos con `aiosqlite`.
+- Define los esquemas de entrada y salida con Pydantic para los endpoints, asegurando un tipado estricto.
+
+#### PASO A PASO 2: Ciclo de Vida del Servidor (Lifespan) y Datos Semilla Dinámicos
+- Utiliza el decorador `@asynccontextmanager` para manejar el ciclo de vida (`lifespan`) de FastAPI.
+- Al arrancar la aplicación, valida con `os.path.exists` si el archivo `agentemotor.db` ya existe.
+- Si NO existe, ejecuta un script DDL para crear estas tres tablas:
+  * `clients` (id TEXT PRIMARY KEY, name TEXT, phone TEXT)
+  * `policies` (id TEXT PRIMARY KEY, client_id TEXT, insurer TEXT, expiration_date TEXT, status TEXT)
+  * `contact_attempts` (id TEXT PRIMARY KEY, policy_id TEXT, date TEXT, notes TEXT)
+- **Inserción Semilla Dinámica:** Para evitar la obsolescencia del software, calcula las fechas de prueba en Python usando `datetime.date.today()` y `datetime.timedelta`. Inserta automáticamente los datos semilla con los siguientes 6 escenarios matemáticos exactos respecto a hoy:
+  * 2 Pólizas Críticas: Configura su fecha de vencimiento para que sea de 5 y 10 días en el pasado (vencidas, dentro de la ventana de 30 días).
+  * 2 Pólizas Perdidas: Configura su fecha de vencimiento para que sea de 35 y 40 días en el pasado (vencidas fuera de la ventana de 30 días).
+  * 2 Pólizas Preventivas: Configura su fecha de vencimiento para que sea en el futuro, exactamente en 20 y 25 días a partir de hoy (vigentes por vencer).
+- Si el archivo `agentemotor.db` YA existe, la aplicación debe arrancar en silencio sin alterar la información persistida.
+
+#### PASO A PASO 3: Optimización SQL y Contrato de Endpoints
+
+Implementa estrictamente los siguientes dos endpoints:
+
+1. `GET /api/v1/dashboard`
+   - **Evita el problema de consultas concurrentes N+1:** No busques las pólizas y luego iteres en Python haciendo subconsultas para traer a los clientes de uno en uno.
+   - Ejecuta consultas SQL utilizando `INNER JOIN` entre la tabla `policies` y `clients` para obtener en una sola transacción limpia los datos de la póliza y el nombre y teléfono del titular asociado.
+   - Clasifica y divide la información directamente en base a las fechas calculadas con respecto a `today` para retornar un JSON con tres listas independientes y limpias:
+     * `"criticas"`: []
+     * `"perdidas"`: []
+     * `"preventivas"`: []
+
+2. `POST /api/v1/policies/{policy_id}/attempts`
+   - Debe recibir un cuerpo JSON estructurado con un esquema Pydantic (ej. `notes`).
+   - Genera un ID único para el intento de contacto (puedes usar un UUID en texto o el formato que prefieras) y registra la fecha actual de la gestión en la tabla `contact_attempts`.
+   - Retorna una respuesta exitosa confirmando el registro de la interacción.
+
+---
+
+### 4. REQUISITO DE ENTREGA
+Escribe el código completo de `main.py`. Asegúrate de incluir las importaciones necesarias (`fastapi`, `aiosqlite`, `os`, `datetime`, `pydantic`). No uses "placeholders", comentarios del tipo `# Aquí va el código`, ni dejes lógica a la imaginación; entrega el código 100% funcional y listo para producción en producción local.
+
+```
+
+**USER:** (adjunta main.py)
+
+El código de `main.py` que generó Claude quedó impecable, asíncrono y con las optimizaciones de SQL perfectas. Ahora vamos a pasar a la Fase 3: Diseño de la Interfaz (Frontend) centrada en la UX de María.
+
+Antes de ir a una herramienta de generación visual como v0 de Vercel, necesito que actúes como un Diseñador de Experiencia de Usuario (UX) y Frontend Senior. Genérame un PROMPT OPTIMIZADO y ultra detallado para dárselo a la IA encargada de crear la interfaz definitiva.
+
+El prompt que me generes debe exigirle a la otra IA que construya un archivo `index.html` único que implemente:
+
+1. Estética Premium y Profesional: Usando Tailwind CSS mediante CDN. El diseño debe ser limpio, tipografía moderna y un diseño completamente responsivo que haga ver al MVP como un software empresarial de alto nivel.
+2. El Dashboard de Alertas Visuales: Debe mapear la respuesta del endpoint `GET /api/v1/dashboard`. En lugar de listas simples, debe maquetar 3 columnas o contenedores claros divididos por códigos de color psicológicos según el riesgo de la regla en el PDF inicial.
+   - Columna Críticas: Bordes o acentos Naranja (`orange-500`), representando urgencia inmediata (en periodo de gracia).
+   - Columna Perdidas: Bordes o acentos Rojo (`red-500`), representando clientes fuera de gracia en riesgo de irse con la competencia.
+   - Columna Preventivas: Bordes o acentos Azul (`blue-500`), representando la fase preventiva de renovación anticipada.
+3. Tarjetas de Póliza (Cards): Cada elemento de las listas debe ser una tarjeta blanca con sombra ligera, bordes redondeados y excelente espaciado. Debe mostrar de forma jerárquica:
+   - El número de póliza en negrita y la aseguradora (ej. Sura, Mapfre) con un ícono o etiqueta pequeña.
+   - El nombre completo del cliente y su teléfono destacado.
+   - Dos botones de acción rápida en la tarjeta: uno verde que simule abrir WhatsApp/Llamar y otro gris/azul que diga "Registrar Gestión".
+4. Modal Dinámico Interactivo (Formulario de Contacto): Al hacer clic en el botón "Registrar Gestión" de cualquier tarjeta, debe abrirse una ventana flotante (Modal) moderna con una capa oscura de fondo. 
+   - El modal debe capturar el ID de la póliza seleccionada de forma invisible.
+   - Debe incluir un campo de texto simple (`textarea`) limpio que diga: "Notas de la llamada o interacción".
+   - Al darle al botón "Guardar Gestión", JavaScript debe capturar las notas, armar el JSON correspondiente y enviarlo mediante un fetch `POST` asíncrono a `http://127.0.0.1:8000/api/v1/policies/{policy_id}/attempts`. Al recibir éxito (201), debe cerrar el modal de inmediato y mostrar una alerta flotante temporal de éxito en pantalla.
+
+Genérame el prompt estructurado con "Chain of Thought" para pasárselo a la IA encargada del código HTML/JS visual.
+
+**IA:**
+
+¡Excelente avance! El código de backend refleja una arquitectura asíncrona impecable. Ahora, para garantizar que la IA encargada del Frontend no recurra a diseños genéricos o código incompleto, estructuraremos este prompt usando **Cadena de Pensamiento (Chain of Thought)** enfocada en la UX, la psicología del color aplicada al negocio y la interactividad limpia con JavaScript Vanilla.
+
+Aquí tienes el prompt optimizado, riguroso y listo para copiar y pegar en la IA de generación de interfaces:
+
+---
+
+```markdown
+Eres un Diseñador de Experiencia de Usuario (UX) y Desarrollador Frontend Senior. Tu objetivo es crear la interfaz web definitiva para un MVP llamado "AgenteMotor — Gestión de Renovaciones". El software está diseñado exclusivamente para María, una asesora de seguros que necesita gestionar alertas críticas de vencimiento de pólizas y registrar sus llamadas de forma inmediata.
+
+Debes construir un único archivo autocontenido llamado `index.html` que incluya la estructura HTML5, los estilos visuales mediante Tailwind CSS (vía CDN) y la lógica interactiva en JavaScript Vanilla (ES6+). No dejes componentes a medias ni uses comentarios del tipo "// Aquí cargas los datos"; entrega el código 100% funcional.
+
+---
+
+### 1. GUÍA DE ESTILO Y PSICOLOGÍA VISUAL (Tailwind CSS)
+El diseño debe lucir como un software SaaS empresarial premium y moderno.
+- Fondo de la aplicación: Un gris ultra claro y limpio (`bg-slate-50`).
+- Tipografía: San Serif limpia, con excelente contraste, jerarquía de tamaños y espaciados generosos (`tracking-wide`, `leading-relaxed`).
+- Sistema de Alertas por Colores (Crítico para el negocio):
+  * Sección CRÍTICAS (Pólizas vencidas dentro de los 30 días de gracia colombianos): Acentos, textos o bordes en Naranja (`orange-500` / `orange-600`). Representa acción requerida ya.
+  * Sección PERDIDAS (Pólizas vencidas hace más de 30 días): Acentos, textos o bordes en Rojo (`red-500` / `red-600`). Representa riesgo máximo de pérdida del cliente.
+  * Sección PREVENTIVAS (Pólizas que vencen en los próximos 15 a 30 días): Acentos, textos o bordes en Azul (`blue-500` / `blue-600`). Representa planeación y anticipación.
+
+---
+
+### 2. CADENA DE PENSAMIENTO: PASO A PASO DE LA IMPLEMENTACIÓN UI/UX
+
+Quiero que estructures y programes el archivo `index.html` razonando y construyendo los siguientes bloques en orden:
+
+#### PASO A PASO 1: Estructura Base y Header de la Aplicación
+- Configura el HTML5 estándar importando Tailwind CSS desde su CDN oficial.
+- Diseña un Header minimalista y elegante en la parte superior. Debe incluir el nombre de la plataforma ("AgenteMotor"), un indicador visual que diga "Sesión: María" y un contador global de pólizas por gestionar.
+
+#### PASO A PASO 2: El Dashboard de 3 Columnas Resposivas
+- Crea un contenedor principal que se distribuya en 3 columnas verticales independientes en pantallas de escritorio (`grid grid-cols-1 lg:grid-cols-3 gap-6`).
+- Cada columna debe representar una categoría del negocio:
+  1. Columnas Izquierda: "Urgencia Crítica (< 30 días)" -> Contenedor con borde superior o sutiles toques naranjas.
+  2. Columna Central: "En Riesgo de Pérdida (> 30 días)" -> Contenedor con borde superior o sutiles toques rojos.
+  3. Columna Derecha: "Renovación Preventiva (15-30 días)" -> Contenedor con borde superior o sutiles toques azules.
+- Cada columna debe tener una cabecera limpia que indique el nombre del estado y un contador dinámico de tarjetas (ej: "2 Pólizas").
+
+#### PASO A PASO 3: Consumo del Endpoint y Renderizado de Tarjetas (Cards)
+- Escribe una función JavaScript asíncrona (`async/await`) que se ejecute al cargar la página (`window.onload`) y realice una petición `fetch` al endpoint `GET http://127.0.0.1:8000/api/v1/dashboard`.
+- Al recibir el JSON con las listas `"criticas"`, `"perdidas"` y `"preventivas"`, limpia los contenedores e inyecta dinámicamente las tarjetas correspondientes.
+- **Diseño de cada Tarjeta (Card):**
+  * Debe ser un contenedor blanco (`bg-white`), con esquinas redondeadas (`rounded-xl`), una sombra ligera (`shadow-sm`) y un borde sutil que combine con el color de su categoría.
+  * **Jerarquía de Información:**
+    1. Parte superior: Nombre de la Aseguradora destacado y número de póliza en texto gris/negro en negrita.
+    2. Centro: Nombre completo del cliente (`text-slate-800`, tipografía más grande) y su número de teléfono celular visible y legible.
+    3. Fecha de vencimiento claramente visible con una etiqueta que denote los días transcurridos o restantes si es posible.
+  * **Botones de Acción de la Tarjeta:**
+    - Botón Verde (`bg-emerald-500`): Un botón de acción rápida con el ícono o texto "Llamar / WhatsApp". Al hacer clic, debe simular abrir un enlace o alertar la acción.
+    - Botón Gris/Azul (`bg-slate-100` o `bg-indigo-50`): Texto claro que diga "Registrar Gestión". Este botón debe pasar el ID de la póliza al modal interactivamente.
+
+#### PASO A PASO 4: Modal de Gestión e Interacción Asíncrona (POST)
+- Diseña un componente Modal oculto por defecto (usando clases de Tailwind como `hidden`, `fixed`, `inset-0`, `bg-black/50` para el fondo oscurecido y centrado absoluto).
+- Al hacer clic en "Registrar Gestión" en cualquier tarjeta:
+  * El JavaScript debe remover la clase `hidden` del modal para mostrarlo suavemente.
+  * Debe almacenar de forma interna (en un atributo `data-id` o variable global) el `policy_id` de la tarjeta seleccionada.
+  * El modal debe mostrar un título limpio: "Registrar Gestión de Contacto" y un campo de formulario `textarea` amplio y estilizado con la leyenda "Notas de la llamada o interacción...".
+- **Botón "Guardar Gestión":**
+  * Al hacer clic, debe validar que el campo de notas no esté vacío.
+  * Debe enviar un fetch asíncrono con método `POST` a: `http://127.0.0.1:8000/api/v1/policies/{policy_id}/attempts`.
+  * El cuerpo del envío debe ser el JSON estricto: `{"notes": "texto del textarea"}`.
+- **Flujo de Éxito:**
+  * Al recibir una respuesta exitosa (status 201), el modal debe cerrarse inmediatamente (añadiendo de nuevo la clase `hidden`).
+  * Debe limpiar el contenido del `textarea`.
+  * Debe disparar una pequeña notificación o alerta flotante (Toast Notification) en la esquina superior derecha de la pantalla que diga "Gestión guardada con éxito" y desaparecer automáticamente a los 3 segundos.
+
+---
+
+### 3. REQUISITO DE ENTREGA
+Genera el código fuente completo del archivo `index.html`. Asegúrate de escribir todo el JavaScript necesario dentro de las etiquetas `<script>` al final del archivo, manejando correctamente las promesas, las capturas de errores con `try/catch` (en caso de que el backend esté apagado) y la manipulación limpia del DOM.
+
+```
+
+**USER:** (adjunta main.py e index.html)
+
+ya tenemos los dos archivos finales y funcionan correctamente
+
+**IA:**
+
+¡Excelente! Es un gran hito ver que ambos componentes (main.py e index.html) están completamente integrados, respetan la asincronía y resuelven el dolor operativo de María utilizando el stack ligero y portable definido.
+
+Para dar por concluida la metodología SDD (Specification-Driven Development) y preparar una entrega impecable que cumpla con el 100% de los requisitos de la prueba técnica de Agentemotor, pasaremos a la Fase 4: Aseguramiento, Pruebas y Preparación de la Entrega.
+
+A continuación, estructuro las piezas finales del rompecabezas que necesitas incluir en tu archivo ZIP de entrega:
+1. Pruebas Unitarias Automatizadas (test_main.py)
+
+La prueba solicita 2 o 3 tests del caso más crítico. En nuestro contexto, el comportamiento más crítico es la clasificación de pólizas según la regla de negocio colombiana (los 30 días de gracia) y la prevención de consultas rotas.
+
+"""
+AgenteMotor - Suite de Pruebas Unitarias y de Integración
+Archivo: test_main.py
+Ejecución: pytest -v test_main.py
+"""
+
+import os
+import pytest
+import asyncio
+import aiosqlite
+import datetime
+from httpx import AsyncClient, ASGITransport
+from contextlib import asynccontextmanager
+
+# Importamos la aplicación y la ruta base del archivo principal
+import main
+from main import app, DashboardItem
+
+TEST_DB_PATH = "test_agentemotor.db"
+
+# ---------------------------------------------------------------------------
+# Fixtures y Configuración del Entorno de Pruebas
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def anyio_backend():
+    return "asyncio"
+
+
+@asynccontextmanager
+async def get_test_db_session():
+    """Generador de sesiones seguro para la base de datos de pruebas."""
+    conn = await aiosqlite.connect(TEST_DB_PATH)
+    conn.row_factory = aiosqlite.Row
+    try:
+        yield conn
+    finally:
+        await conn.close()
+
+
+async def init_test_db():
+    """Inicializa el esquema DDL y datos semilla controlados para pruebas."""
+    async with aiosqlite.connect(TEST_DB_PATH) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                name  TEXT    NOT NULL,
+                phone TEXT    NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS policies (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_id       INTEGER NOT NULL REFERENCES clients(id),
+                insurer         TEXT    NOT NULL,
+                expiration_date TEXT    NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS contact_attempts (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                policy_id    INTEGER NOT NULL REFERENCES policies(id),
+                attempt_date TEXT    NOT NULL,
+                observation  TEXT    NOT NULL
+            )
+        """)
+        await db.commit()
+
+        # Insertamos datos estáticos predecibles para aserciones exactas
+        # Cliente 1: Póliza Crítica (Vencida hace 10 días)
+        # Cliente 2: Póliza Preventiva (Vence en 5 días)
+        today = datetime.date.today()
+        critica_date = (today - datetime.timedelta(days=10)).isoformat()
+        preventiva_date = (today + datetime.timedelta(days=5)).isoformat()
+
+        await db.execute("INSERT INTO clients (id, name, phone) VALUES (1, 'Test Critico', '555-0001')")
+        await db.execute("INSERT INTO clients (id, name, phone) VALUES (2, 'Test Preventivo', '555-0002')")
+        
+        await db.execute(f"INSERT INTO policies (id, client_id, insurer, expiration_date) VALUES (10, 1, 'Insurer A', '{critica_date}')")
+        await db.execute(f"INSERT INTO policies (id, client_id, insurer, expiration_date) VALUES (20, 2, 'Insurer B', '{preventiva_date}')")
+        
+        await db.commit()
+
+
+@pytest.fixture(autouse=True, scope="session")
+async def setup_and_teardown_db():
+    """Fixture de ciclo de vida que prepara y destruye el entorno de pruebas."""
+    # Forzar el uso de la base de datos de prueba modificando la constante global
+    main.DB_PATH = TEST_DB_PATH
+    
+    # Sobrescribir el context manager del módulo principal para que use la BD de test
+    main.get_db_session = get_test_db_session
+
+    # Inicializar la base de datos temporal
+    if os.path.exists(TEST_DB_PATH):
+        os.remove(TEST_DB_PATH)
+        
+    await init_test_db()
+    
+    yield  # Aquí se ejecutan los tests
+    
+    # Limpieza al finalizar la suite completa
+    if os.path.exists(TEST_DB_PATH):
+        os.remove(TEST_DB_PATH)
+
+
+# ---------------------------------------------------------------------------
+# Casos de Prueba Críticos
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_get_dashboard_consistency():
+    """
+    Test 1: Consistencia del Dashboard (GET)
+    Valida el código 200, estructura de arreglo JSON, orden comercial correcto
+    y consistencia de campos dinámicos calculados (days_difference y status).
+    """
+    transport = ASGITransport(app=app)
+    async_client = AsyncClient(transport=transport, base_url="http://test")
+    
+    async with async_client as ac:
+        response = await ac.get("/api/dashboard")
+        
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+    # El orden comercial estricto exige 'critica' antes que 'preventiva'
+    policy_critica = data[0]
+    policy_preventiva = data[1]
+
+    assert policy_critica["policy_id"] == 10
+    assert policy_critica["status"] == "critica"
+    assert policy_critica["days_difference"] == -10
+    assert policy_critica["client_name"] == "Test Critico"
+
+    assert policy_preventiva["policy_id"] == 20
+    assert policy_preventiva["status"] == "preventiva"
+    assert policy_preventiva["days_difference"] == 5
+    assert policy_preventiva["client_name"] == "Test Preventivo"
+
+
+@pytest.mark.anyio
+async def test_create_contact_attempt_success():
+    """
+    Test 2: Registro Exitoso de Gestión (POST)
+    Valida la correcta inserción, respuesta HTTP 201 Created y estructura
+    del mensaje JSON de éxito.
+    """
+    transport = ASGITransport(app=app)
+    async_client = AsyncClient(transport=transport, base_url="http://test")
+    
+    payload = {
+        "policy_id": 20,
+        "observation": "Se contactó al cliente por WhatsApp, confirma revisión mañana."
+    }
+    
+    async with async_client as ac:
+        response = await ac.post("/api/attempts", json=payload)
+        
+    assert response.status_code == 201
+    data = response.json()
+    assert data["policy_id"] == 20
+    assert "message" in data
+    assert "attempt_date" in data
+    assert data["message"] == "Intento de contacto registrado exitosamente."
+
+
+@pytest.mark.anyio
+async def test_create_contact_attempt_integrity_failure():
+    """
+    Test 3: Validación de Integridad Referencial (Caso Fallido)
+    Valida que al enviar un policy_id inexistente el backend responda con
+    un código 404 Not Found controlado, mitigando excepciones no controladas 500.
+    """
+    transport = ASGITransport(app=app)
+    async_client = AsyncClient(transport=transport, base_url="http://test")
+    
+    payload = {
+        "policy_id": 9999,  # ID inexistente
+        "observation": "Póliza fantasma."
+    }
+    
+    async with async_client as ac:
+        response = await ac.post("/api/attempts", json=payload)
+        
+    assert response.status_code == 404
+    data = response.json()
+    assert "detail" in data
+    assert "no existe en el sistema" in data["detail"]
+
+Checklist Final para tu Video (Consigna del PDF)
+No olvides grabar el video de máximo 3 minutos que solicita la prueba. El requerimiento indica:
+
+    Lee las partes más relevantes de tu spec.md.
+
+    Comenta la decisión que más tiempo te tomó pensar (una excelente respuesta para defender en el video es cómo estructurar la inserción de datos semilla de forma dinámica calculando distancias de días a partir de today para evitar que el evaluador técnico viera un tablero vacío o desactualizado en el futuro).
+
+¡Muchos éxitos con la entrega del MVP a Agentemotor! Si necesitas pulir algún detalle de la documentación final, avísame. **user**(amen hermano)

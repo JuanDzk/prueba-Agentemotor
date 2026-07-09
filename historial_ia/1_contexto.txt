@@ -1,0 +1,407 @@
+========================================================================
+FASE 1: CONTEXTUALIZACIÓN Y DECISIONES DE ARQUITECTURA
+Herramienta: IA de Contexto (GEMINI)
+Entradas: PDF "prueba-tecnica-agentemotor-2026.pdf"
+Objetivo: Definir el alcance del MVP (Producto Mínimo Viable), clasificar los estados comerciales 
+          según la ley colombiana y elegir el stack tecnológico.
+========================================================================
+
+**USER:**
+
+hola, estoy aplicando para una oferta de empleo, necesito tu ayuda total en la entrega de la prueba para pasar a la 
+siguiente fase, el PDF que adjunto contiene el contexto que usaremos para definir los pasos que llevaremos a cabo, 
+inicialmente solo vamos a identificarlos y a tomar decisiones de lo que se desea implementar. 
+
+**IA:**
+
+Hola. He comprendido perfectamente el propósito y el contexto de la prueba técnica para Agentemotor. Mi objetivo es ser tu copiloto estratégico en este proceso, ayudándote a estructurar el proyecto, tomar las decisiones de diseño adecuadas y generar las instrucciones precisas para guiar a las otras inteligencias artificiales en el desarrollo del backend y del frontend.
+
+Para comenzar de manera ordenada y alineada con los requisitos de la entrega (especialmente para la construcción del archivo `spec.md`), iniciaremos con la **Fase de Identificación y Toma de Decisiones**.
+
+A continuación, presento el desglose de los componentes clave del problema y las definiciones estratégicas que adoptaremos para el MVP.
+
+---
+
+## 🎯 1. Entendimiento del Problema y Flujo de Trabajo
+
+El problema central de María es la **pérdida de visibilidad y control sobre las fechas críticas** debido a las limitaciones de un archivo Excel manual. Esto genera dos dolores principales:
+
+* **Fuga de clientes (5-10 al mes):** Al no detectar a tiempo los vencimientos, los clientes renuevan con la competencia.
+* **Pérdida de historial:** Al sobrescribir los datos en el Excel, pierde el contexto de las interacciones previas ("qué le ofrecí a quién").
+
+### El Factor Regulatorio como Solución
+
+La ventana de 30 días posteriores al vencimiento es la métrica de negocio más crítica. El sistema debe dejar de ser un simple listado alfabético y convertirse en un **tablero de priorización dinámico** basado en el tiempo transcurrido desde el vencimiento.
+
+---
+
+## 🛠️ 2. Alcance del MVP: Qué se construye y qué queda fuera
+
+Para garantizar una entrega impecable en el tiempo estimado, definiremos un alcance quirúrgico enfocado en resolver el problema inmediato de María, dejando fuera características secundarias.
+
+### Funcionalidades Incluidas (El Core)
+
+* **Dashboard de Control Único:** Una sola pantalla principal que categorice visualmente las pólizas según su nivel de urgencia.
+* **Cálculo de Antigüedad en Caliente:** El sistema calculará los días de desfase en tiempo real comparando la fecha de vencimiento con la fecha actual.
+* **Registro de Gestión:** Un mecanismo rápido para que María registre un "intento de contacto" (llamada, mensaje) sin salir de la pantalla, guardando un comentario e historial, reemplazando la columna "Gestionado con una X".
+
+### Funcionalidades Excluidas (Justificación para `spec.md`)
+
+* **Autenticación y Registro de Usuarios:** Se asume que la aplicación se ejecuta localmente y es de uso exclusivo para María. Añadir login aporta complejidad técnica pero cero valor al problema del Excel dañado.
+* **Creación/Edición Masiva de Clientes:** Nos enfocaremos en la lectura y gestión de la base de datos existente. La carga inicial se manejará mediante datos semilla.
+
+---
+
+## 💾 3. Decisiones Arquitectónicas y Modelo de Datos
+
+Para cumplir con la restricción de ejecutar todo con un máximo de 3 comandos y asegurar la portabilidad del sistema, utilizaremos el siguiente diseño:
+
+### Modelo de Entidades (SQLite)
+
+Diseñaremos tres tablas simples y relacionadas para estructurar la información que antes estaba plana en el Excel:
+
+```
+  +------------------+          +------------------+          +--------------------+
+  |     clients      |          |     policies     |          |  contact_attempts  |
+  +------------------+          +------------------+          +--------------------+
+  | id (PK)          | 1      N | id (PK)          | 1      N | id (PK)            |
+  | name             |--------->| client_id (FK)   |--------->| policy_id (FK)     |
+  | phone            |          | insurer          |          | attempt_date       |
+  +------------------+          | expiration_date  |          | observation        |
+                                +------------------+          +--------------------+
+
+```
+
+* **Mitigación del Problema N+1:** Al consultar el dashboard, el backend no hará una petición por cada cliente de forma cíclica. Se implementará un `INNER JOIN` directo en SQL para unificar los datos del cliente y la póliza en una sola transacción eficiente.
+
+---
+
+## 🚦 Próximo Paso
+
+Por favor, confirma si estás de acuerdo con esta definición de alcance, la exclusión de la autenticación y la estructura de las tablas.
+
+Una vez que me des tu aprobación, pasaremos a la siguiente fase para estructurar el **Prompt Optimizado** que le entregarás a la IA de Backend para generar el archivo `main.py` con su base de datos y datos semilla dinámicos. ¿Damos el visto bueno para continuar?
+
+**USER:**
+
+Excelente. me parece correcto tu analisis, ahora especificame que tipo de arquitectura y stack podemos usar para este fin, 
+como manejar los registros y el calculo de los tiempos, la base de datos y finalmente los endpoints limpios. y yo validaré. 
+
+**IA:**
+
+Perfecto. A continuación, te especifico la arquitectura general, el stack sugerido, la estrategia de datos y los endpoints limpios que utilizaremos para la construcción del MVP de AgenteMotor. Esta estructura está pensada para ser extremadamente ligera, portable y fácil de ejecutar localmente sin configuraciones complejas.
+
+---
+
+### 1. Arquitectura General y Stack Tecnológico
+
+Para cumplir con la necesidad de simplicidad y portabilidad absoluta (poder levantar todo el sistema con un máximo de 3 comandos), optaremos por una arquitectura de **Monolito Ligero** distribuido de la siguiente forma:
+
+* **Backend:** **FastAPI + Uvicorn**. Nos proporciona un rendimiento asíncrono excepcional, tipado estricto nativo y documentación automática de endpoints sin sobrecargar el proyecto.
+* **Base de Datos y Persistencia:** **SQLite** a través de la librería asíncrona `aiosqlite`. Guardaremos la información en un archivo local (`agentemotor.db`). No usaremos ORMs pesados (como SQLAlchemy); en su lugar, utilizaremos SQL puro para garantizar el máximo control del rendimiento y evitar ineficiencias.
+* **Frontend:** **Single Page Application (SPA)** contenida en un único archivo `index.html` con **JavaScript Vanilla (ES6+)** para interactuar con la API mediante `fetch()`, y estilos estructurados con **Tailwind CSS** a través de su CDN.
+
+---
+
+### 2. Base de Datos y Gestión de Registros
+
+Diseñaremos una estructura relacional limpia y normalizada que separe las entidades de forma lógica para evitar la sobreescritura de datos:
+
+* **Tabla `clients`:** Almacena los datos básicos del cliente.
+* `id` (INTEGER, Primary Key)
+* `name` (TEXT)
+* `phone` (TEXT)
+
+
+* **Tabla `policies`:** Almacena la información de los seguros de los vehículos asociados a cada cliente.
+* `id` (INTEGER, Primary Key)
+* `client_id` (INTEGER, Foreign Key apuntando a `clients.id`)
+* `insurer` (TEXT) - Aseguradora
+* `expiration_date` (TEXT) - Fecha de vencimiento de la póliza (almacenada en formato ISO YYYY-MM-DD)
+
+
+* **Tabla `contact_attempts`:** Historial de gestiones. Reemplaza la marca manual del Excel guardando el contexto de cada interacción.
+* `id` (INTEGER, Primary Key)
+* `policy_id` (INTEGER, Foreign Key apuntando a `policies.id`)
+* `attempt_date` (TEXT) - Fecha y hora del contacto
+* `observation` (TEXT) - Comentarios detallados de la llamada o mensaje
+
+
+
+---
+
+### 3. Cálculo de los Tiempos y Alertas ("En Caliente")
+
+Para asegurar que las categorías de urgencia no queden obsoletas, la clasificación se calculará dinámicamente en tiempo real en cada consulta utilizando la lógica de fechas de Python (`datetime` y `timedelta`). No almacenaremos el estado en la base de datos de forma rígida.
+
+Tomando como base la fecha actual del servidor (`today`), la lógica será la siguiente:
+
+1. **🟢 Preventivas:** Pólizas que aún están vigentes pero cuyo vencimiento es inminente.
+* *Fórmula:* `expiration_date >= today`
+
+
+2. **🔴 Críticas (Ventana Dorada):** Pólizas que ya vencieron pero que están dentro de los 30 días posteriores, lapso clave amparado por la ley en Colombia donde existe mayor probabilidad de retener al cliente.
+* *Fórmula:* `expiration_date < today` **Y** `días transcurridos <= 30`
+
+
+3. **⚫ Perdidas:** Pólizas que llevan más de 30 días vencidas, lo que indica un cliente que muy probablemente ya contrató con otra entidad.
+* *Fórmula:* `días transcurridos > 30`
+
+
+
+---
+
+### 4. Endpoints Limpios (API REST)
+
+Para mantener la aplicación ágil, el frontend se comunicará con el backend mediante dos únicos endpoints estratégicos:
+
+#### A. `GET /api/dashboard`
+
+* **Propósito:** Retorna el listado unificado para construir el tablero principal de María.
+* **Mitigación del problema N+1:** El backend no iterará haciendo consultas individuales por cliente. Se implementará un `INNER JOIN` nativo en SQL que asocie las pólizas con sus respectivos clientes y con el último intento de contacto registrado en una sola transacción de base de datos.
+* **Estructura del JSON esperado:**
+```json
+[
+  {
+    "policy_id": 1,
+    "client_name": "Juan Pérez",
+    "client_phone": "+573001234567",
+    "insurer": "Seguros Bolívar",
+    "expiration_date": "2026-05-20",
+    "days_difference": -12, 
+    "status": "critica",
+    "last_contact": "2026-05-22: Se envió cotización, pendiente de respuesta."
+  }
+]
+
+```
+
+
+
+#### B. `POST /api/attempts`
+
+* **Propósito:** Registrar un nuevo intento de contacto cuando María gestione un cliente desde la interfaz.
+* **Cuerpo de la Petición (JSON):**
+```json
+{
+  "policy_id": 1,
+  "observation": "Se le marcó por teléfono pero no contestó, se deja mensaje de WhatsApp."
+}
+
+```
+
+
+* **Lógica interna:** Inserta un nuevo registro en la tabla `contact_attempts` asociando de manera automática la fecha y hora exacta del servidor.
+
+---
+
+Por favor, revisa esta propuesta técnica. Si estás de acuerdo y consideras que cubre de manera óptima las necesidades del problema, confírmame para avanzar con la generación de las herramientas y artefactos necesarios de backend.
+
+**USER:**
+
+apruebo la propuesta tecnica.
+
+Procedamos de inmediato. Basándote en esta estructura técnica aprobada, genérame el PROMPT DE INGENIERÍA DE SOFTWARE definitivo y ultra-optimizado (utilizando la metodología Chain of Thought) para entregárselo a la IA de Backend (Claude).
+
+El prompt que me generes debe exigirle a la otra IA que escriba el código completo del archivo `main.py` asegurando lo siguiente:
+
+1. Infraestructura y Configuración: Todo debe residir estrictamente en un único archivo llamado `main.py`. Debe implementar FastAPI, Uvicorn y persistencia local asíncrona con `aiosqlite` en la base de datos `agentemotor.db`.
+
+2. Inicialización Automatizada (Lifespan): Al encenderse la aplicación, debe validar si el archivo de la base de datos existe usando `os.path.exists`. Si no existe, debe ejecutar el script DDL para inicializar las tablas normalizadas (`clients`, `policies`, `contact_attempts`) y poblar automáticamente la base de datos con los 6 escenarios dinámicos de prueba calculados desde `datetime.date.today()` (2 críticas, 2 perdidas y 2 preventivas). Si el archivo ya existe, debe iniciar el servidor de forma transparente sin alterar los datos existentes.
+
+3. Lógica del Dashboard Eficiente: El endpoint `GET /api/dashboard` debe realizar la consulta usando SQL puro con un `INNER JOIN` para unificar los datos de la póliza y el cliente, calculando la diferencia de días en caliente y categorizando cada registro en base a las fórmulas matemáticas acordadas. Debe retornar el JSON estructurado con las listas correspondientes limpias y tipadas estrictamente mediante Pydantic.
+
+4. Registro de Gestiones: El endpoint `POST /api/attempts` debe recibir el esquema Pydantic con la información de la observación, validar la existencia del ID de la póliza y registrar la interacción guardando la fecha actual.
+
+Por favor, entrégame el prompt estructurado, directo y listo para copiar y pegar en el otro entorno de desarrollo.
+
+**IA:**
+
+Entendido. Como Arquitecto de Software, valido que el enfoque asíncrono puro y la mitigación explícita del antipatrón N+1 garantizan el cumplimiento de los estándares de rendimiento exigidos en la prueba técnica, manteniendo la portabilidad del monolito sin requerir dependencias externas complejas.
+
+A continuación, presento el **PROMPT DE INGENIERÍA** definitivo y ultra-optimizado estructurado bajo la metodología *Chain of Thought*. Está diseñado con restricciones deterministas y tipado estricto para que lo copies y pegues directamente en la IA ejecutora del backend:
+
+---
+
+```markdown
+Actúa como un Desarrollador Backend Senior especializado en Python, FastAPI y optimización de bases de datos relacionales. Tu tarea es generar el código definitivo, completo y listo para producción para el archivo único 'main.py' de un MVP de gestión de renovaciones de seguros llamado "AgenteMotor".
+
+Debes seguir estrictamente las siguientes directrices arquitectónicas y de negocio, aplicando un razonamiento paso a paso (Chain of Thought). No uses placeholders, elipses (...) o comentarios de "implementación futura". Todo el código debe estar escrito explícitamente.
+
+---
+
+### 1. CONFIGURACIÓN E INFRAESTRUCTURA (Single-File Monolith)
+- Stack Tecnológico Obligatorio: FastAPI, Uvicorn, aiosqlite (asíncrono para SQLite) y Pydantic.
+- Base de Datos: Archivo local llamado 'agentemotor.db'. Queda prohibido el uso de ORMs pesados (como SQLAlchemy); debes utilizar consultas en SQL crudo a través de aiosqlite para garantizar un control total sobre el rendimiento.
+- CORS: Configura el Middleware de CORS para permitir peticiones desde cualquier origen ('*') para que la SPA del Frontend pueda consumir los endpoints de forma local sin bloqueos.
+
+---
+
+### 2. CICLO DE VIDA Y PERSISTENCIA (Lifespan & Seeding)
+Implementa el manejador de contexto asíncrono 'lifespan' de FastAPI para gestionar el arranque de la aplicación con la siguiente lógica secuencial:
+1. Validación de Existencia: Utiliza 'os.path.exists' para verificar si el archivo 'agentemotor.db' ya existe en el directorio de trabajo.
+2. Inicialización DDL (Si NO existe):
+   - Crea la tabla 'clients': id (INTEGER PK), name (TEXT), phone (TEXT).
+   - Crea la tabla 'policies': id (INTEGER PK), client_id (INTEGER FK -> clients.id), insurer (TEXT), expiration_date (TEXT en formato ISO YYYY-MM-DD).
+   - Crea la tabla 'contact_attempts': id (INTEGER PK), policy_id (INTEGER FK -> policies.id), attempt_date (TEXT), observation (TEXT).
+3. Inyección de Datos Semilla Dinámicos: Si la base de datos fue creada desde cero, inserta inmediatamente 6 escenarios de prueba calculados dinámicamente utilizando variables de tiempo basadas en 'datetime.date.today()' para asegurar que las alertas sean vigentes sin importar cuándo se ejecute el sistema:
+   - 2 Escenarios Preventivos: Pólizas que vencen en el futuro inmediato (ej. hoy + 5 días y hoy + 12 días).
+   - 2 Escenarios Críticos (Ventana Dorada): Pólizas vencidas dentro de los 30 días de gracia legales en Colombia (ej. hoy - 10 días y hoy - 25 días).
+   - 2 Escenarios Perdidos: Pólizas cuyo vencimiento superó el margen de retención (ej. hoy - 45 días y hoy - 60 días).
+4. Persistencia Transparente: Si el archivo de la base de datos ya existe, omite la inicialización y continúa la ejecución del servidor de manera transparente para resguardar los datos previamente guardados por el usuario.
+
+---
+
+### 3. MODELADO DE DATOS (Pydantic Validation)
+Define esquemas estrictos de Pydantic para las solicitudes y respuestas de la API:
+- CreateContactAttempt: Contiene 'policy_id' (int) y 'observation' (str).
+- DashboardItem: Define la estructura unificada que consumirá la interfaz, incluyendo: 'policy_id' (int), 'client_name' (str), 'client_phone' (str), 'insurer' (str), 'expiration_date' (str), 'days_difference' (int), 'status' (str), y 'last_contact' (str o None).
+
+---
+
+### 4. ENDPOINTS DE LA API REST (Limpios y Optimizados)
+
+#### A. GET /api/dashboard
+- Objetivo: Retornar los datos del tablero unificado de control de pólizas.
+- Mitigación Mandatoria del Problema N+1: Está terminantemente prohibido iterar sobre los registros realizando subconsultas individuales. Debes extraer toda la información del cliente y de su póliza en un solo viaje de red a la base de datos utilizando un 'INNER JOIN' nativo en SQL. 
+- Subconsulta para Historial: Acopla al resultado el último texto de gestión registrado en 'contact_attempts' para la póliza mediante una subconsulta estructurada (o LEFT JOIN con condición MAX/ROW_NUMBER) para evitar la pérdida del historial.
+- Cálculo de Lógica Temporal "En Caliente": En el backend, procesa cada registro comparando la fecha actual ('datetime.date.today()') con la 'expiration_date' de la póliza para calcular la diferencia exacta en días ('days_difference'). Clasifica dinámicamente el campo 'status' bajo las siguientes reglas comerciales:
+  - Si days_difference >= 0 -> 'preventiva'
+  - Si days_difference < 0 y days_difference >= -30 -> 'critica'
+  - Si days_difference < -30 -> 'perdida'
+- Retorno: Devuelve una lista ordenada, donde se prioricen las alertas de forma que las 'criticas' se listen primero, seguidas de las 'preventivas' y por último las 'perdidas'.
+
+#### B. POST /api/attempts
+- Objetivo: Almacenar un nuevo registro de gestión telefónica o por mensaje.
+- Validación de Integridad: Verifica asíncronamente en la base de datos si el 'policy_id' recibido existe. En caso de no existir, eleva un HTTP 404 Not Found con un detalle descriptivo.
+- Registro: Inserta la observación en la tabla 'contact_attempts' capturando la fecha y hora exacta del servidor en formato ISO ('datetime.datetime.now().isoformat()').
+- Retorno: Mensaje de confirmación exitosa con código HTTP 201 Created.
+
+---
+
+### 5. EJECUCIÓN DIRECTA (Uvicorn Block)
+Al final del archivo, incluye el bloque estándar 'if __name__ == "__main__":' para levantar la aplicación mediante 'uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)' de modo que el backend se pueda iniciar con un único comando directo en la terminal de Python.
+
+Escribe el código completo estructurándolo de manera limpia y modular, garantizando el manejo de excepciones básico en las operaciones de base de datos.
+
+```
+
+---
+
+Por favor, copia este prompt y ejecútalo en la IA de Backend. Una vez que tengas el archivo `main.py` listo, confírmame para que procedamos de inmediato con el diseño de la interfaz y la generación del prompt definitivo para el Frontend (`index.html`).
+
+**USER:** (adjunta archivo main.py)
+
+este es el archivo main, ahora basado en los requerimientos del sistema que clase de frontend podriamos pedirle a 
+claude que nos haga para este sistema?
+
+**IA:**
+
+Para construir una interfaz perfecta para María, la asesora de seguros, debemos respetar estrictamente las restricciones de la prueba técnica: una **Single Page Application (SPA)** contenida en un único archivo `index.html`, utilizando **HTML5, JavaScript Vanilla (ES6+)** para consumir la API mediante `fetch()`, y **Tailwind CSS vía CDN** para los estilos. No se permiten frameworks (React, Vue) ni empaquetadores (Vite, npm).
+
+A continuación, te presento la estructura de la interfaz y un **Prompt de Ingeniería optimizado** bajo la metodología *Chain of Thought* para que se lo entregues directamente a Claude.
+
+---
+
+### Estructura sugerida para el Frontend (Fase 2)
+
+1. **Métricas clave (Kpis Top):** Tarjetas superiores que muestren el conteo resumido de pólizas en cada estado (Críticas, Preventivas, Perdidas) para que María tenga visibilidad inmediata de su carga de trabajo.
+2. **Dashboard / Tabla Principal de Alertas:** Una sola vista estructurada con pestañas o filtros rápidos para navegar entre categorías. El diseño debe resaltar visualmente las alertas según su severidad (por ejemplo, rojo para críticas, amarillo para preventivas).
+3. **Acciones directas:** Cada fila debe incluir un botón de "Registrar Gestión" o "Contactar".
+4. **Modal dinámico de Gestión:** Al hacer clic en gestionar, se abrirá un modal nativo que muestre los datos del cliente, su teléfono (con enlace directo a WhatsApp Web `https://wa.me/`) y un formulario simple con un `textarea` para enviar la observación al endpoint `POST /api/attempts` (o `/attempts` según el main.py) y recargar el dashboard asíncronamente sin perder el estado de la página.
+
+---
+
+### 📋 Prompt Optimizado para la IA de Frontend (Creación de index.html)
+
+Copia y pega el siguiente bloque en Claude:
+
+```text
+Actúa como un Desarrollador Frontend Senior experto en UX/UI, HTML5, JavaScript Vanilla (ES6+) y Tailwind CSS. Tu objetivo es generar el código definitivo, completo y completamente funcional para el archivo 'index.html' de un MVP de gestión de renovaciones de seguros llamado "AgenteMotor".
+
+El archivo debe ser autocontenido (Monolito SPA), por lo que incluirá la estructura HTML, los estilos mediante Tailwind CDN y la lógica de control en JavaScript dentro de una etiqueta <script>.
+
+Restricciones Técnicas Inmutables:
+1. Stack Autorizado: HTML5, JavaScript Vanilla (ES6+), Tailwind CSS (vía CDN de Play o Minificado). Queda estrictamente PROHIBIDO el uso de frameworks (React, Vue, Angular) o herramientas de node/npm/Vite.
+2. Servidor de desarrollo local: Se levantará con 'python3 -m http.server 5500'. Por ende, la URL base de consumo para la API de FastAPI (main.py) será 'http://127.0.0.1:8000'. Asegúrate de configurar correctamente los encabezados o el fetch para interactuar de forma asíncrona.
+3. Consumo de Endpoints:
+   - GET http://127.0.0.1:8000/dashboard (Debe retornar el listado de pólizas con campos: policy_id, client_name, client_phone, insurer, expiration_date, days_difference, status, last_contact).
+   - POST http://127.0.0.1:8000/attempts (Payload JSON: { "policy_id": int, "observation": str }).
+
+Requerimientos de Interfaz y UX (Pensado para María):
+1. Panel de Métricas (KPIs): Tarjetas superiores con contadores automáticos calculados en el frontend a partir de la respuesta del dashboard, divididos en:
+   - Alertas Críticas (0 a 30 días vencidas - Regla colombiana de días de gracia).
+   - Alertas Preventivas (Próximas a vencer).
+   - Alertas Perdidas (Más de 30 días vencidas).
+2. Tabla de Datos Principal: Limpia y responsiva, ordenada por prioridad de riesgo. Debe incluir badges de colores llamativos para el 'status' (ej. Rojo para Crítica, Amarillo para Preventiva, Gris para Perdida). Debe mostrar de forma clara la última gestión realizada ('last_contact').
+3. Filtros Interactivos: Botones o pestañas para segmentar la tabla rápidamente por estado sin recargar la página.
+4. Modal Nativo de Gestión de Contacto:
+   - Debe activarse al presionar "Registrar Gestión" en cualquier fila de la tabla.
+   - Mostrará el nombre del cliente, póliza y un acceso directo funcional para enviar un mensaje por WhatsApp Web usando su teléfono (ej. https://wa.me/57...).
+   - Incluirá un formulario con un campo de texto ('observación') y un botón "Guardar Gestión" que ejecute el POST asíncronamente. Al finalizar con éxito, cerrará el modal, limpiará el formulario y refrescará los datos de la tabla automáticamente mediante fetch().
+
+Instrucciones de Programación (Javascript):
+- Encapsula la lógica dentro del evento 'DOMContentLoaded'.
+- Utiliza funciones asíncronas (async/await) limpias y maneja errores de red de forma elegante con bloques try/catch (mostrando algún indicador visual o alerta si el backend está apagado).
+- No uses placeholders ni dejes funciones a medias. Entrega el archivo index.html completo y listo para producción local.
+
+```
+
+---
+
+### ¿Cómo seguir después de esto?
+
+Una vez que Claude te devuelva el archivo `index.html`, colócalo en la raíz de tu proyecto al lado de `main.py`. Levanta el backend en una terminal (`python main.py`) y el frontend en otra (`python3 -m http.server 5500`). Abre el navegador y valida que la comunicación asíncrona funcione perfectamente. ¡Estarás listo para la fase final de documentación!
+
+**USER:**
+
+buena estructura, los contadores KPI superiores y el acceso directo a WhatsApp vía `https://wa.me/` son adiciones brillantes para resolver el problema de negocio.
+
+Sin embargo, detecté un error de consistencia técnica en las rutas de los Endpoints dentro del prompt que generaste. Revisando nuestro backend real de `main.py`, los endpoints fueron expuestos bajo el prefijo de la API:
+- GET es `http://127.0.0.1:8000/api/dashboard`
+- POST es `http://127.0.0.1:8000/api/attempts`
+
+En tu prompt omitiste el `/api`. Por favor, corrige el prompt
+
+**IA:**
+
+Tienes toda la razón, fue una omisión de mi parte. En el archivo `main.py` real que acabamos de validar, las rutas están correctamente estructuradas utilizando el prefijo de la API (`/api/dashboard` y `/api/attempts`). Mantener esta consistencia es vital para que la comunicación asíncrona entre el cliente y el servidor no rompa la aplicación al primer intento de carga.
+
+A continuación, te presento el **Prompt de Ingeniería para el Frontend corregido y ultra-optimizado**, garantizando que las URLs apunten exactamente a la infraestructura que tenemos desplegada:
+
+---
+
+```text
+Actúa como un Desarrollador Frontend Senior experto en UX/UI, HTML5, JavaScript Vanilla (ES6+) y Tailwind CSS. Tu objetivo es generar el código definitivo, completo y completamente funcional para el archivo 'index.html' de un MVP de gestión de renovaciones de seguros llamado "AgenteMotor".
+
+El archivo debe ser autocontenido (Monolito SPA), por lo que incluirá la estructura HTML, los estilos mediante Tailwind CDN y la lógica de control en JavaScript dentro de una etiqueta <script>.
+
+Restricciones Técnicas Inmutables:
+1. Stack Autorizado: HTML5, JavaScript Vanilla (ES6+), Tailwind CSS (vía CDN de Play o Minificado). Queda estrictamente PROHIBIDO el uso de frameworks (React, Vue, Angular) o herramientas de node/npm/Vite.
+2. Servidor de desarrollo local: Se levantará con 'python3 -m http.server 5500'. Por ende, la URL base de consumo para la API de FastAPI (main.py) será 'http://127.0.0.1:8000'. Asegúrate de configurar correctamente los encabezados o el fetch para interactuar de forma asíncrona.
+3. Consumo exacto de Endpoints (Crucial para consistencia con main.py):
+   - GET http://127.0.0.1:8000/api/dashboard (Retorna el listado unificado de pólizas con campos: policy_id, client_name, client_phone, insurer, expiration_date, days_difference, status, last_contact).
+   - POST http://127.0.0.1:8000/api/attempts (Payload JSON exacto: { "policy_id": int, "observation": str }).
+
+Requerimientos de Interfaz y UX (Pensado para María):
+1. Panel de Métricas (KPIs): Tarjetas superiores con contadores automáticos calculados en el frontend a partir de la respuesta del dashboard, divididos en:
+   - Alertas Críticas (0 a 30 días vencidas - Regla colombiana de días de gracia).
+   - Alertas Preventivas (Próximas a vencer).
+   - Alertas Perdidas (Más de 30 días vencidas).
+2. Tabla de Datos Principal: Limpia y responsiva, ordenada por prioridad de riesgo. Debe incluir badges de colores llamativos para el 'status' (ej. Rojo para Crítica, Amarillo para Preventiva, Gris para Perdida). Debe mostrar de forma clara la última gestión realizada ('last_contact').
+3. Filtros Interactivos: Botones o pestañas para segmentar la tabla rápidamente por estado sin recargar la página.
+4. Modal Nativo de Gestión de Contacto:
+   - Debe activarse al presionar "Registrar Gestión" en cualquier fila de la tabla.
+   - Mostrará el nombre del cliente, póliza y un acceso directo funcional para enviar un mensaje por WhatsApp Web usando su teléfono (ej. https://wa.me/57...).
+   - Incluirá un formulario con un campo de texto ('observación') y un botón "Guardar Gestión" que ejecute el POST asíncronamente hacia la ruta correcta de la API. Al finalizar con éxito, cerrará el modal, limpiará el formulario y refrescará los datos de la tabla automáticamente mediante fetch().
+
+Instrucciones de Programación (Javascript):
+- Encapsula la lógica dentro del evento 'DOMContentLoaded'.
+- Utiliza funciones asíncronas (async/await) limpias y maneja errores de red de forma elegante con bloques try/catch (mostrando algún indicador visual o alerta si el backend está apagado).
+- No uses placeholders ni dejes funciones a medias. Entrega el archivo index.html completo y listo para producción local.
+
+```
+
+---
+
+Con esta corrección, los endpoints quedan perfectamente alineados con el backend de FastAPI. Ya puedes entregarle esta instrucción a Claude para obtener el `index.html`.
